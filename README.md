@@ -9,7 +9,7 @@ https://github.com/kusabanachi/VaxInterpreter
 $ hg clone https://bitbucket.org/7shi/vaxrun
 $ cd vaxrun
 $ make
-$ make install
+$ sudo make install
 ```
 
 ## Usage
