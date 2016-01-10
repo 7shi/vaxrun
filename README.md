@@ -1,4 +1,4 @@
-# User Mode VAX interpreter
+# User Mode VAX Interpreter
 
 This distribution is forked from:
 https://github.com/kusabanachi/VaxInterpreter
