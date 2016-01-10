@@ -6,6 +6,8 @@ https://github.com/kusabanachi/VaxInterpreter
 ## Install
 
 ```
+$ hg clone https://bitbucket.org/7shi/vaxrun
+$ cd vaxrun
 $ make
 $ make install
 ```
