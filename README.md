@@ -1,6 +1,6 @@
 # User Mode VAX Interpreter
 
-This distribution is forked from:
+This distribution has forked from:
 https://github.com/kusabanachi/VaxInterpreter
 
 ## Install
@@ -24,4 +24,5 @@ main() {
 }
 $ vaxcc hello.c
 $ vaxrun a.out
+hello
 ```
