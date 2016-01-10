@@ -1,6 +1,6 @@
 # User Mode VAX Interpreter
 
-This distribution has forked from:
+This distribution has been forked from:
 https://github.com/kusabanachi/VaxInterpreter
 
 ## Install
