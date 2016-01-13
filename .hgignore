@@ -1,3 +1,6 @@
 syntax: glob
+build/
+private/
+dist/
 *.out
 *.class

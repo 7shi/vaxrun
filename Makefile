@@ -2,15 +2,18 @@ PREFIX=~/.vaxrun
 BINDIR=/usr/local/bin
 
 all:
-	mkdir -p class/vax_interpreter
-	javac -d class vax_interpreter/*.java
+	mkdir -p build/classes
+	javac -d build/classes `find src -name "*.java"`
+	mkdir -p dist
+	jar cfm dist/VFSViewer.jar VFSViewer.mf -C build/classes/ .
 
 install:
 	mkdir -p $(PREFIX)
-	tar cvf - root class | tar xf - -C $(PREFIX)
+	install -c -m 755 bin/* $(BINDIR)
+	cd build && tar cvf - classes | tar xf - -C $(PREFIX)
+	tar cvf - root | tar xf - -C $(PREFIX)
 	chmod 755 $(PREFIX)/root/bin/*
 	cd $(PREFIX)/root/lib && chmod 755 c2 ccom cpp f1
-	install -c -m 755 bin/* $(BINDIR)
 
 clean:
-	rm -rf class
+	rm -rf build dist

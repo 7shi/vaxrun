@@ -1,2 +1,2 @@
 #!/bin/sh
-java -cp ~/.vaxrun/class vax_interpreter/VaxInterpreter -rp ~/.vaxrun/root $@
+java -cp ~/.vaxrun/classes vax_interpreter/VaxInterpreter -rp ~/.vaxrun/root $@
