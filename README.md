@@ -30,3 +30,10 @@ $ vaxcc hello.c
 $ vaxrun a.out
 hello
 ```
+
+## Build UNIX/32V Kernel
+
+```
+$ cd sys/sys
+$ make
+```

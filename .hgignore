@@ -5,5 +5,7 @@ dist/
 root/tmp/
 cmd/nm
 cmd/strip
+sys/sys/unix
+*.o
 *.out
 *.class
