@@ -1,2 +1,3 @@
 #!/bin/sh
 sh ./vaxrun ../root/bin/cc $@
+rm -f ../root/tmp/*
