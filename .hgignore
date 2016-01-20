@@ -2,5 +2,8 @@ syntax: glob
 build/
 private/
 dist/
+root/tmp/
+cmd/nm
+cmd/strip
 *.out
 *.class
