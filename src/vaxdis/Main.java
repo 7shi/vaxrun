@@ -1,6 +1,7 @@
 // This file is licensed under the CC0.
 package vaxdis;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
@@ -12,7 +13,11 @@ class Memory {
     protected int pc;
 
     public Memory(String path) throws IOException {
-        text = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+        this(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
+    }
+
+    public Memory(byte[] text) throws IOException {
+        this.text = text;
         buf = ByteBuffer.wrap(text).order(java.nio.ByteOrder.LITTLE_ENDIAN);
     }
 
@@ -204,6 +209,10 @@ class VAXDisasm extends Memory {
         super(path);
     }
 
+    public VAXDisasm(byte[] text) throws IOException {
+        super(text);
+    }
+
     public String getOpr(VAXType t) {
         if (t == VAXType.RELB || t == VAXType.RELW) {
             int rel = fetchSigned(t.size);
@@ -275,6 +284,28 @@ class VAXDisasm extends Memory {
     }
 }
 
+class AOut {
+
+    public final ByteBuffer header;
+    public final byte[] text;
+
+    public AOut(String path) throws IOException {
+        try (FileInputStream fis = new FileInputStream(path)) {
+            byte[] h = new byte[0x20];
+            fis.read(h);
+            ByteBuffer hdr = ByteBuffer.wrap(h).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            if (hdr.getInt() == 0x108) {
+                header = hdr;
+                text = new byte[hdr.getInt(4)];
+                fis.read(text);
+                return;
+            }
+        }
+        header = null;
+        text = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+    }
+}
+
 public class Main {
 
     public static void main(String[] args) {
@@ -288,7 +319,8 @@ public class Main {
                     System.out.println();
                 }
                 System.out.println(args[i]);
-                new VAXDisasm(args[i]).disasm(System.out);
+                AOut aout = new AOut(args[i]);
+                new VAXDisasm(aout.text).disasm(System.out);
             }
         } catch (Exception ex) {
             ex.printStackTrace(System.out);
