@@ -263,7 +263,7 @@ class VAXDisasm extends Memory {
                 }
             case 9:
                 if (b2 == 15) {
-                    return "*" + fetchHex(4, "");
+                    return "*" + addr(fetchSigned(4));
                 } else {
                     return "*(" + r + ")+";
                 }
@@ -271,7 +271,7 @@ class VAXDisasm extends Memory {
                 String prefix = (b1 & 1) == 1 ? "*" : "";
                 int disp = fetchSigned(1 << ((b1 - 0xa) >> 1));
                 if (b2 == 15) {
-                    return String.format("%s0x%x", prefix, pc + disp);
+                    return prefix + addr(pc + disp);
                 } else {
                     return String.format("%s%s(%s)", prefix, hex(disp), r);
                 }
@@ -320,6 +320,14 @@ class VAXDisasm extends Memory {
 
     public String word1() {
         return ".word " + hex(Short.toUnsignedInt((short) fetchSigned(2)));
+    }
+
+    public String addr(int ad) {
+        String ret = String.format("0x%x", ad);
+        if (aout != null && aout.symT.containsKey(ad)) {
+            ret += "<" + aout.symT.get(ad) + ">";
+        }
+        return ret;
     }
 
     public static String hex(int v) {
@@ -398,7 +406,7 @@ class AOut {
                     for (int p = 0; p <= a_syms - 16; p += 16) {
                         Symbol s = new Symbol(sbuf, p);
                         list.add(s);
-                        if (s.tchar == 't' || s.tchar == 'T') {
+                        if (4 <= s.type && s.type <= 9) {
                             if (s.name.endsWith(".o")) {
                                 symO.put(s.value, s.name);
                             } else {
