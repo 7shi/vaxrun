@@ -13,7 +13,7 @@ class Memory {
 
     protected final byte[] text;
     protected final ByteBuffer buf;
-    public int pc;
+    protected int pc;
 
     public Memory(String path) throws IOException {
         this(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
@@ -210,12 +210,19 @@ class VAXDisasm extends Memory {
         "r8", "r9", "r10", "r11", "ap", "fp", "sp", "pc"
     };
 
+    private AOut aout;
+
     public VAXDisasm(String path) throws IOException {
         super(path);
     }
 
     public VAXDisasm(byte[] text) throws IOException {
         super(text);
+    }
+
+    public VAXDisasm(AOut aout) throws IOException {
+        super(aout.text);
+        this.aout = aout;
     }
 
     public String getOpr(VAXType t) {
@@ -283,7 +290,21 @@ class VAXDisasm extends Memory {
     public void disasm(PrintStream out) {
         while (pc < text.length) {
             int oldpc = pc;
-            String asm = disasm1();
+            String asm = null;
+            if (aout != null) {
+                String o = aout.symO.get(oldpc);
+                if (o != null) {
+                    System.out.printf("[%s]\n", o);
+                }
+                String t = aout.symO.get(oldpc);
+                if (aout.symT.containsKey(oldpc)) {
+                    System.out.printf("%s:\n", aout.symT.get(oldpc));
+                    asm = word1();
+                }
+            }
+            if (asm == null) {
+                asm = disasm1();
+            }
             output(out, oldpc, pc - oldpc, asm);
         }
     }
@@ -334,12 +355,12 @@ class Symbol {
 
 class AOut {
 
-    private ByteBuffer header;
-    private int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
-    private byte[] text, data;
-    private Symbol[] syms;
-    private Hashtable<Integer, String> symO = new Hashtable<>();
-    private Hashtable<Integer, String> symT = new Hashtable<>();
+    public final ByteBuffer header;
+    public final int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
+    public final byte[] text, data;
+    public final Symbol[] syms;
+    public final Hashtable<Integer, String> symO = new Hashtable<>();
+    public final Hashtable<Integer, String> symT = new Hashtable<>();
 
     public AOut(String path) throws IOException {
         try (FileInputStream fis = new FileInputStream(path)) {
@@ -378,12 +399,17 @@ class AOut {
                     }
                     syms = new Symbol[list.size()];
                     list.toArray(syms);
+                } else {
+                    syms = null;
                 }
                 return;
             }
         }
         header = null;
+        a_text = a_data = a_bss = a_syms = a_entry = a_trsize = a_drsize = 0;
         text = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+        data = null;
+        syms = null;
     }
 
     @Override
@@ -393,25 +419,6 @@ class AOut {
         }
         return String.format("magic = %08x, text = %08x, data = %08x, syms = %08x",
                 a_magic, a_text, a_data, a_syms);
-    }
-
-    public void disasm(PrintStream out) throws IOException {
-        VAXDisasm dis = new VAXDisasm(text);
-        while (dis.pc < text.length) {
-            int oldpc = dis.pc;
-            String o = symO.get(oldpc);
-            if (o != null) {
-                System.out.printf("[%s]\n", o);
-            }
-            String t = symO.get(oldpc), asm;
-            if (symT.containsKey(oldpc)) {
-                System.out.printf("%s:\n", symT.get(oldpc));
-                asm = dis.word1();
-            } else {
-                asm = dis.disasm1();
-            }
-            dis.output(out, oldpc, dis.pc - oldpc, asm);
-        }
     }
 }
 
@@ -430,7 +437,7 @@ public class Main {
                 System.out.println(args[i]);
                 AOut aout = new AOut(args[i]);
                 System.out.println(aout);
-                aout.disasm(System.out);
+                new VAXDisasm(aout).disasm(System.out);
             }
         } catch (Exception ex) {
             ex.printStackTrace(System.out);
