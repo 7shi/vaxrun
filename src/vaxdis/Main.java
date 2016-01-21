@@ -7,7 +7,7 @@ import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.Hashtable;
+import java.util.HashMap;
 
 class Memory {
 
@@ -359,8 +359,8 @@ class AOut {
     public final int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
     public final byte[] text, data;
     public final Symbol[] syms;
-    public final Hashtable<Integer, String> symO = new Hashtable<>();
-    public final Hashtable<Integer, String> symT = new Hashtable<>();
+    public final HashMap<Integer, String> symO = new HashMap<>();
+    public final HashMap<Integer, String> symT = new HashMap<>();
 
     public AOut(String path) throws IOException {
         try (FileInputStream fis = new FileInputStream(path)) {
