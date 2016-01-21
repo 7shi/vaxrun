@@ -47,12 +47,21 @@ class Memory {
         for (int i = 0; i < size; ++i) {
             bs[i] = fetch();
         }
-        StringBuilder sb = new StringBuilder("0x");
+        StringBuilder sb = new StringBuilder();
         for (int i = size - 1; i >= 0; --i) {
             sb.append(String.format("%02x", bs[i]));
         }
-        sb.append(suffix);
-        return sb.toString();
+        String x = sb.toString();
+        int p = 0;
+        while (p < x.length() - 1 && x.charAt(p) == '0') {
+            ++p;
+        }
+        String xx = x.substring(p);
+        String prefix = "0x";
+        if (xx.length() == 1 && Character.isDigit(xx.charAt(0))) {
+            prefix = "";
+        }
+        return prefix + x.substring(p) + suffix;
     }
 
     public void output(PrintStream out, int pc, int len, String asm) {
