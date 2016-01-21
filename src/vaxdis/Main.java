@@ -7,12 +7,13 @@ import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Hashtable;
 
 class Memory {
 
     protected final byte[] text;
     protected final ByteBuffer buf;
-    protected int pc;
+    public int pc;
 
     public Memory(String path) throws IOException {
         this(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
@@ -287,6 +288,10 @@ class VAXDisasm extends Memory {
         }
     }
 
+    public String word1() {
+        return ".word " + hex(Short.toUnsignedInt((short) fetchSigned(2)));
+    }
+
     public static String hex(int v) {
         String sign = "";
         if (v < 0) {
@@ -329,10 +334,12 @@ class Symbol {
 
 class AOut {
 
-    public final ByteBuffer header;
-    public final int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
-    public final byte[] text, data;
-    public final Symbol[] syms;
+    private ByteBuffer header;
+    private int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
+    private byte[] text, data;
+    private Symbol[] syms;
+    private Hashtable<Integer, String> symO = new Hashtable<>();
+    private Hashtable<Integer, String> symT = new Hashtable<>();
 
     public AOut(String path) throws IOException {
         try (FileInputStream fis = new FileInputStream(path)) {
@@ -359,22 +366,24 @@ class AOut {
                     ByteBuffer sbuf = ByteBuffer.wrap(sym).order(ByteOrder.LITTLE_ENDIAN);
                     ArrayList<Symbol> list = new ArrayList<>();
                     for (int p = 0; p <= a_syms - 16; p += 16) {
-                        Symbol a = new Symbol(sbuf, p);
-                        list.add(new Symbol(sbuf, p));
+                        Symbol s = new Symbol(sbuf, p);
+                        list.add(s);
+                        if (s.tchar == 't' || s.tchar == 'T') {
+                            if (s.name.endsWith(".o")) {
+                                symO.put(s.value, s.name);
+                            } else {
+                                symT.put(s.value, s.name);
+                            }
+                        }
                     }
                     syms = new Symbol[list.size()];
                     list.toArray(syms);
-                } else {
-                    syms = null;
                 }
                 return;
             }
         }
         header = null;
-        a_text = a_data = a_bss = a_syms = a_entry = a_trsize = a_drsize = 0;
         text = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
-        data = null;
-        syms = null;
     }
 
     @Override
@@ -384,6 +393,25 @@ class AOut {
         }
         return String.format("magic = %08x, text = %08x, data = %08x, syms = %08x",
                 a_magic, a_text, a_data, a_syms);
+    }
+
+    public void disasm(PrintStream out) throws IOException {
+        VAXDisasm dis = new VAXDisasm(text);
+        while (dis.pc < text.length) {
+            int oldpc = dis.pc;
+            String o = symO.get(oldpc);
+            if (o != null) {
+                System.out.printf("[%s]\n", o);
+            }
+            String t = symO.get(oldpc), asm;
+            if (symT.containsKey(oldpc)) {
+                System.out.printf("%s:\n", symT.get(oldpc));
+                asm = dis.word1();
+            } else {
+                asm = dis.disasm1();
+            }
+            dis.output(out, oldpc, dis.pc - oldpc, asm);
+        }
     }
 }
 
@@ -402,7 +430,7 @@ public class Main {
                 System.out.println(args[i]);
                 AOut aout = new AOut(args[i]);
                 System.out.println(aout);
-                new VAXDisasm(aout.text).disasm(System.out);
+                aout.disasm(System.out);
             }
         } catch (Exception ex) {
             ex.printStackTrace(System.out);
