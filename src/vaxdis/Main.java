@@ -229,7 +229,7 @@ class VAXDisasm extends Memory {
             case 1:
             case 2:
             case 3:
-                return String.format("$0x%x%s", b, t.valueSuffix);
+                return "$" + hex(b) + t.valueSuffix;
             case 4:
                 return getOpr(t) + "[" + r + "]";
             case 5:
@@ -256,7 +256,7 @@ class VAXDisasm extends Memory {
                 if (b2 == 15) {
                     return String.format("%s0x%x", prefix, pc + disp);
                 } else {
-                    return String.format("%s0x%x(%s)", prefix, disp, r); // 符号?
+                    return String.format("%s%s(%s)", prefix, hex(disp), r);
                 }
             }
         }
@@ -285,6 +285,16 @@ class VAXDisasm extends Memory {
             String asm = disasm1();
             output(out, oldpc, pc - oldpc, asm);
         }
+    }
+
+    public static String hex(int v) {
+        String sign = "";
+        if (v < 0) {
+            sign = "-";
+            v = -v;
+        }
+        String x = v < 10 ? "" : "0x";
+        return String.format("%s%s%x", sign, x, v);
     }
 }
 
