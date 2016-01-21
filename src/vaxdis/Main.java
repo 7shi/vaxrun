@@ -248,7 +248,7 @@ class VAXDisasm extends Memory {
                 if (b2 == 15) {
                     return "*" + fetchHex(4, "");
                 } else {
-                    return "@(" + r + ")+"; // @?
+                    return "*(" + r + ")+";
                 }
             default: {
                 String prefix = (b1 & 1) == 1 ? "*" : "";
