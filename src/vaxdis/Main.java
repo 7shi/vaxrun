@@ -55,20 +55,22 @@ class Memory {
     }
 
     public void output(PrintStream out, int pc, int len, String asm) {
-        String fmt = text.length < 0x1000 ? "%4x:\t" : "%8x:\t";
         for (int i = 0; i < len; ++i) {
-            if ((i & 3) == 0) {
-                if (i > 0) {
-                    out.println(i == 4 ? "\t" + asm : "");
+            if ((i & 7) == 0) {
+                if (i > 0 && i == 8) {
+                    out.println("  " + asm);
                 }
-                out.printf(fmt, pc + i);
+                out.printf("%08x:", pc + i);
             }
-            out.printf("%02x ", text[pc + i]);
+            out.printf(" %02x", text[pc + i]);
         }
-        for (int i = len; i < 4; ++i) {
-            out.print("   ");
+        if (len <= 8) {
+            for (int i = len; i < 8; ++i) {
+                out.print("   ");
+            }
+            out.print("  " + asm);
         }
-        out.println(len <= 4 ? "\t" + asm : "");
+        out.println();
     }
 }
 
