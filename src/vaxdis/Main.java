@@ -286,11 +286,41 @@ class VAXDisasm extends Memory {
     }
 }
 
+class Symbol {
+
+    public final String name;
+    public final int type, other, desc, value;
+    public final char tchar;
+
+    public Symbol(ByteBuffer buf, int p) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 8; ++i) {
+            char ch = (char) buf.get(p + i);
+            if (ch == 0) {
+                break;
+            }
+            sb.append(ch);
+        }
+        name = sb.toString();
+        type = buf.get(p + 8);
+        other = buf.get(p + 9);
+        desc = buf.getShort(p + 10);
+        value = buf.getInt(p + 12);
+        tchar = type < 10 ? "uUaAtTdDbB".charAt(type) : '?';
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%08x %c %s", value, tchar, name);
+    }
+}
+
 class AOut {
 
     public final ByteBuffer header;
     public final int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
-    public final byte[] text, data, syms;
+    public final byte[] text, data;
+    public final Symbol[] syms;
 
     public AOut(String path) throws IOException {
         try (FileInputStream fis = new FileInputStream(path)) {
@@ -312,8 +342,16 @@ class AOut {
                 fis.read(text);
                 fis.read(data);
                 if (a_syms > 0) {
-                    syms = new byte[a_syms];
-                    fis.read(syms);
+                    byte[] sym = new byte[a_syms];
+                    fis.read(sym);
+                    ByteBuffer sbuf = ByteBuffer.wrap(sym).order(ByteOrder.LITTLE_ENDIAN);
+                    ArrayList<Symbol> list = new ArrayList<>();
+                    for (int p = 0; p <= a_syms - 16; p += 16) {
+                        Symbol a = new Symbol(sbuf, p);
+                        list.add(new Symbol(sbuf, p));
+                    }
+                    syms = new Symbol[list.size()];
+                    list.toArray(syms);
                 } else {
                     syms = null;
                 }
