@@ -5,6 +5,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
 
 class Memory {
 
@@ -18,7 +20,7 @@ class Memory {
 
     public Memory(byte[] text) throws IOException {
         this.text = text;
-        buf = ByteBuffer.wrap(text).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        buf = ByteBuffer.wrap(text).order(ByteOrder.LITTLE_ENDIAN);
     }
 
     public int fetch() {
@@ -287,22 +289,51 @@ class VAXDisasm extends Memory {
 class AOut {
 
     public final ByteBuffer header;
-    public final byte[] text;
+    public final int a_magic, a_text, a_data, a_bss, a_syms, a_entry, a_trsize, a_drsize;
+    public final byte[] text, data, syms;
 
     public AOut(String path) throws IOException {
         try (FileInputStream fis = new FileInputStream(path)) {
             byte[] h = new byte[0x20];
             fis.read(h);
-            ByteBuffer hdr = ByteBuffer.wrap(h).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            if (hdr.getInt() == 0x108) {
+            ByteBuffer hdr = ByteBuffer.wrap(h).order(ByteOrder.LITTLE_ENDIAN);
+            a_magic = hdr.getInt();
+            if (a_magic == 0x108) {
                 header = hdr;
-                text = new byte[hdr.getInt(4)];
+                a_text = hdr.getInt(4);
+                a_data = hdr.getInt(8);
+                a_bss = hdr.getInt(12);
+                a_syms = hdr.getInt(16);
+                a_entry = hdr.getInt(20);
+                a_trsize = hdr.getInt(24);
+                a_drsize = hdr.getInt(28);
+                text = new byte[a_text];
+                data = new byte[a_data];
                 fis.read(text);
+                fis.read(data);
+                if (a_syms > 0) {
+                    syms = new byte[a_syms];
+                    fis.read(syms);
+                } else {
+                    syms = null;
+                }
                 return;
             }
         }
         header = null;
+        a_text = a_data = a_bss = a_syms = a_entry = a_trsize = a_drsize = 0;
         text = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+        data = null;
+        syms = null;
+    }
+
+    @Override
+    public String toString() {
+        if (a_magic != 0x108) {
+            return String.format("unknown format: %08x", a_magic);
+        }
+        return String.format("magic = %08x, text = %08x, data = %08x, syms = %08x",
+                a_magic, a_text, a_data, a_syms);
     }
 }
 
@@ -320,6 +351,7 @@ public class Main {
                 }
                 System.out.println(args[i]);
                 AOut aout = new AOut(args[i]);
+                System.out.println(aout);
                 new VAXDisasm(aout.text).disasm(System.out);
             }
         } catch (Exception ex) {
