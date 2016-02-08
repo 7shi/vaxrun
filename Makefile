@@ -8,6 +8,9 @@ all:
 	jar cfm dist/VFSViewer.jar VFSViewer.mf -C build/classes/ .
 	$(MAKE) $@ -C cmd
 
+install-msys2:
+	sh msys2.sh $(BINDIR)
+
 install:
 	mkdir -p $(PREFIX)
 	install -c -m 755 bin/* $(BINDIR)

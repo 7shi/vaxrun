@@ -10,11 +10,23 @@ Distribution of VAX Tools
 
 ## Install
 
+#### UNIX
+
 ```
 $ hg clone https://bitbucket.org/7shi/vaxrun
 $ cd vaxrun
 $ make
 $ sudo make install
+```
+
+#### MSYS2
+
+```
+$ hg clone https://bitbucket.org/7shi/vaxrun
+$ cd vaxrun
+$ make install-msys2
+$ make
+$ make install
 ```
 
 ## Usage
