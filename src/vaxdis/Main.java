@@ -434,8 +434,11 @@ class AOut {
         if (a_magic != 0x108) {
             return String.format("unknown format: %08x", a_magic);
         }
-        return String.format("magic = %08x, text = %08x, data = %08x, syms = %08x",
-                a_magic, a_text, a_data, a_syms);
+        return String.format(
+                "magic = %08x, text  = %08x, data   = %08x, bss    = %08x\n"
+                + "syms  = %08x, entry = %08x, trsize = %08x, drsize = %08x",
+                a_magic, a_text, a_data, a_bss,
+                a_syms, a_entry, a_trsize, a_drsize);
     }
 }
 
@@ -451,7 +454,9 @@ public class Main {
                 if (i > 0) {
                     System.out.println();
                 }
-                System.out.println(args[i]);
+                if (args.length > 1) {
+                    System.out.println(args[i]);
+                }
                 AOut aout = new AOut(args[i]);
                 System.out.println(aout);
                 new VAXDisasm(aout).disasm(System.out);
