@@ -309,6 +309,8 @@ class VAXDisasm extends Memory {
                 if (aout.symT.containsKey(oldpc)) {
                     System.out.printf("%s:\n", aout.symT.get(oldpc));
                     asm = word1();
+                } else if (oldpc == aout.a_entry) {
+                    asm = word1();
                 }
             }
             if (asm == null) {
