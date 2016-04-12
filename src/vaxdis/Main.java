@@ -13,7 +13,7 @@ class Memory {
 
     protected final byte[] text;
     protected final ByteBuffer buf;
-    protected int pc;
+    protected int pc, offset;
 
     public Memory(String path) throws IOException {
         this(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
@@ -25,7 +25,7 @@ class Memory {
     }
 
     public int fetch() {
-        return Byte.toUnsignedInt(text[pc++]);
+        return Byte.toUnsignedInt(text[(pc++) - offset]);
     }
 
     public int fetchSigned(int size) {
@@ -33,11 +33,11 @@ class Memory {
         pc += size;
         switch (size) {
             case 1:
-                return text[oldpc];
+                return text[oldpc - offset];
             case 2:
-                return buf.getShort(oldpc);
+                return buf.getShort(oldpc - offset);
             case 4:
-                return buf.getInt(oldpc);
+                return buf.getInt(oldpc - offset);
         }
         return 0;
     }
@@ -72,7 +72,7 @@ class Memory {
                 }
                 out.printf("%08x:", pc + i);
             }
-            out.printf(" %02x", text[pc + i]);
+            out.printf(" %02x", text[(pc + i) - offset]);
         }
         if (len <= 8) {
             for (int i = len; i < 8; ++i) {
@@ -232,6 +232,9 @@ class VAXDisasm extends Memory {
     public VAXDisasm(AOut aout) throws IOException {
         super(aout.text);
         this.aout = aout;
+        if (aout.a_entry < 0) {
+            pc = offset = 0x80000000;
+        }
     }
 
     public String getOpr(VAXType t) {
@@ -297,7 +300,7 @@ class VAXDisasm extends Memory {
     }
 
     public void disasm(PrintStream out) {
-        while (pc < text.length) {
+        while (pc - offset < text.length) {
             int oldpc = pc;
             String asm = null;
             if (aout != null) {
@@ -464,7 +467,7 @@ public class Main {
                 new VAXDisasm(aout).disasm(System.out);
             }
         } catch (Exception ex) {
-            ex.printStackTrace(System.out);
+            ex.printStackTrace(System.err);
         }
     }
 }
