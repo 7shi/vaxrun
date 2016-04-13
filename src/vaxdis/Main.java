@@ -403,6 +403,7 @@ class AOut {
                 fis.read(text);
                 fis.read(data);
                 if (a_syms > 0) {
+                    fis.skip(a_trsize + a_drsize);
                     byte[] sym = new byte[a_syms];
                     fis.read(sym);
                     ByteBuffer sbuf = ByteBuffer.wrap(sym).order(ByteOrder.LITTLE_ENDIAN);
