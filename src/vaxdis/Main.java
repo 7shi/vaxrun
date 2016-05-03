@@ -7,82 +7,9 @@ import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-
-class Memory {
-
-    protected final byte[] text;
-    protected final ByteBuffer buf;
-    protected int pc, offset;
-
-    public Memory(String path) throws IOException {
-        this(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
-    }
-
-    public Memory(byte[] text) throws IOException {
-        this.text = text;
-        buf = ByteBuffer.wrap(text).order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    public int fetch() {
-        return Byte.toUnsignedInt(text[(pc++) - offset]);
-    }
-
-    public int fetchSigned(int size) {
-        int oldpc = pc;
-        pc += size;
-        switch (size) {
-            case 1:
-                return text[oldpc - offset];
-            case 2:
-                return buf.getShort(oldpc - offset);
-            case 4:
-                return buf.getInt(oldpc - offset);
-        }
-        return 0;
-    }
-
-    public String fetchHex(int size, String suffix) {
-        int[] bs = new int[size];
-        for (int i = 0; i < size; ++i) {
-            bs[i] = fetch();
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = size - 1; i >= 0; --i) {
-            sb.append(String.format("%02x", bs[i]));
-        }
-        String x = sb.toString();
-        int p = 0;
-        while (p < x.length() - 1 && x.charAt(p) == '0') {
-            ++p;
-        }
-        String xx = x.substring(p);
-        String prefix = "0x";
-        if (xx.length() == 1 && Character.isDigit(xx.charAt(0))) {
-            prefix = "";
-        }
-        return prefix + x.substring(p) + suffix;
-    }
-
-    public void output(PrintStream out, int pc, int len, String asm) {
-        for (int i = 0; i < len; ++i) {
-            if ((i & 7) == 0) {
-                if (i > 0 && i == 8) {
-                    out.println("  " + asm);
-                }
-                out.printf("%08x:", pc + i);
-            }
-            out.printf(" %02x", text[(pc + i) - offset]);
-        }
-        if (len <= 8) {
-            for (int i = len; i < 8; ++i) {
-                out.print("   ");
-            }
-            out.print("  " + asm);
-        }
-        out.println();
-    }
-}
+import java.util.LinkedList;
 
 enum VAXType {
 
@@ -212,35 +139,152 @@ enum VAXOp {
     }
 }
 
-class VAXDisasm extends Memory {
+class Symbol {
+
+    public final String name;
+    public final int type, other, desc, value;
+    public final char tchar;
+
+    public Symbol(int addr) {
+        name = null;
+        value = addr;
+        type = other = desc = tchar = 0;
+    }
+
+    public Symbol(ByteBuffer buf, int p) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 8; ++i) {
+            char ch = (char) buf.get(p + i);
+            if (ch == 0) {
+                break;
+            }
+            sb.append(ch);
+        }
+        name = sb.toString();
+        type = buf.get(p + 8);
+        other = buf.get(p + 9);
+        desc = buf.getShort(p + 10);
+        value = buf.getInt(p + 12) & 0x7fffffff;
+        tchar = type < 10 ? "uUaAtTdDbB".charAt(type) : '?';
+    }
+
+    @Override
+    public String toString() {
+        if (isNull()) {
+            return String.format("%08x", value);
+        }
+        return String.format("%08x %c %s", value, tchar, name);
+    }
+
+    public boolean isObject() {
+        return name != null && name.endsWith(".o");
+    }
+
+    public boolean isNull() {
+        return name == null;
+    }
+}
+
+class VAXDisasm {
 
     private static final String[] regs = {
         "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
         "r8", "r9", "r10", "r11", "ap", "fp", "sp", "pc"
     };
 
-    private AOut aout;
+    private final ByteBuffer buf;
+    private final AOut aout;
+    private int pc, offset, casead, casec;
+    private LinkedList<Symbol> addrs;
 
-    public VAXDisasm(String path) throws IOException {
-        super(path);
-    }
-
-    public VAXDisasm(byte[] text) throws IOException {
-        super(text);
-    }
-
-    public VAXDisasm(AOut aout) throws IOException {
-        super(aout.text);
+    public VAXDisasm(ByteBuffer buf, AOut aout) {
+        this.buf = buf;
         this.aout = aout;
         if (aout.a_entry < 0) {
-            pc = offset = 0x80000000;
+            offset = 0x80000000;
         }
     }
 
-    public String getOpr(VAXType t) {
+    public int fetch() {
+        return Byte.toUnsignedInt(buf.get(pc++));
+    }
+
+    public int fetch(int size) {
+        int oldpc = pc;
+        pc += size;
+        switch (size) {
+            case 1:
+                return buf.get(oldpc);
+            case 2:
+                return buf.getShort(oldpc);
+            case 4:
+                return buf.getInt(oldpc);
+        }
+        return 0;
+    }
+
+    public String fetchHex(int size, String suffix) {
+        int[] bs = new int[size];
+        for (int i = 0; i < size; ++i) {
+            bs[i] = fetch();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = size - 1; i >= 0; --i) {
+            sb.append(String.format("%02x", bs[i]));
+        }
+        String x = sb.toString();
+        int p = 0;
+        while (p < x.length() - 1 && x.charAt(p) == '0') {
+            ++p;
+        }
+        String xx = x.substring(p);
+        String prefix = "0x";
+        if (xx.length() == 1 && Character.isDigit(xx.charAt(0))) {
+            prefix = "";
+        }
+        return prefix + x.substring(p) + suffix;
+    }
+
+    public void output(PrintStream out, int pc, int len, String asm) {
+        for (int i = 0; i < len; ++i) {
+            if ((i & 7) == 0) {
+                if (i > 0 && i == 8) {
+                    out.println("  " + asm);
+                }
+                out.printf("%08x:", offset + pc + i);
+            }
+            out.printf(" %02x", buf.get(pc + i));
+        }
+        if (len <= 8) {
+            for (int i = len; i < 8; ++i) {
+                out.print("   ");
+            }
+            out.print("  " + asm);
+        }
+        out.println();
+    }
+
+    public void addAddress(int ad) {
+        if (addrs == null || ad <= pc) {
+            return;
+        }
+        Symbol sym = new Symbol(ad);
+        int i = 0;
+        for (Symbol s : addrs) {
+            if (s.value > ad) {
+                addrs.add(i, sym);
+                return;
+            }
+            ++i;
+        }
+        addrs.add(sym);
+    }
+
+    public String getOperand(VAXType t) {
         if (t == VAXType.RELB || t == VAXType.RELW) {
-            int rel = fetchSigned(t.size);
-            return String.format("0x%x", pc + rel);
+            int rel = fetch(t.size), ad = pc + rel;
+            addAddress(ad);
+            return String.format("0x%x", ad);
         }
         int b = fetch(), b1 = b >> 4, b2 = b & 15;
         String r = regs[b2];
@@ -251,7 +295,7 @@ class VAXDisasm extends Memory {
             case 3:
                 return "$" + hex(b) + t.valueSuffix;
             case 4:
-                return getOpr(t) + "[" + r + "]";
+                return getOperand(t) + "[" + r + "]";
             case 5:
                 return r;
             case 6:
@@ -266,15 +310,15 @@ class VAXDisasm extends Memory {
                 }
             case 9:
                 if (b2 == 15) {
-                    return "*" + addr(fetchSigned(4));
+                    return "*" + address(fetch(4));
                 } else {
                     return "*(" + r + ")+";
                 }
             default: {
                 String prefix = (b1 & 1) == 1 ? "*" : "";
-                int disp = fetchSigned(1 << ((b1 - 0xa) >> 1));
+                int disp = fetch(1 << ((b1 - 0xa) >> 1));
                 if (b2 == 15) {
-                    return prefix + addr(pc + disp);
+                    return prefix + address(pc + disp);
                 } else {
                     return String.format("%s%s(%s)", prefix, hex(disp), r);
                 }
@@ -282,7 +326,8 @@ class VAXDisasm extends Memory {
         }
     }
 
-    public String disasm1() {
+    public String disasm1(int addr) {
+        pc = addr;
         int opc = fetch();
         VAXOp op = VAXOp.table[opc];
         if (op == null) {
@@ -294,39 +339,82 @@ class VAXDisasm extends Memory {
         StringBuilder sb = new StringBuilder(op.mne);
         for (int i = 0; i < op.oprs.length; ++i) {
             sb.append(i == 0 ? " " : ",");
-            sb.append(getOpr(VAXType.table[op.oprs[i]]));
+            String opr = getOperand(VAXType.table[op.oprs[i]]);
+            switch (op) {
+                case CASEB:
+                case CASEW:
+                case CASEL:
+                    if (i == op.oprs.length - 1) {
+                        casead = pc;
+                        if (opr.startsWith("$0x")) {
+                            casec = Integer.parseInt(opr.substring(3), 16) + 1;
+                        } else if (opr.startsWith("$")) {
+                            casec = Integer.parseInt(opr.substring(1)) + 1;
+                        }
+                    }
+                    break;
+            }
+            sb.append(opr);
         }
         return sb.toString();
     }
 
-    public void disasm(PrintStream out) {
-        while (pc - offset < text.length) {
-            int oldpc = pc;
-            String asm = null;
-            if (aout != null) {
-                String o = aout.symO.get(oldpc);
-                if (o != null) {
-                    System.out.printf("[%s]\n", o);
-                }
-                if (aout.symT.containsKey(oldpc)) {
-                    System.out.printf("%s:\n", aout.symT.get(oldpc));
-                    asm = word1();
-                } else if (oldpc == aout.a_entry) {
-                    asm = word1();
+    public void disasm(PrintStream out, int start, int end) {
+        addrs = aout != null ? aout.getAddresses() : new LinkedList<>();
+        casec = 0;
+        pc = start;
+        while (pc < end) {
+            while (!addrs.isEmpty() && addrs.peek().value < pc) {
+                addrs.remove();
+            }
+            boolean w = pc == aout.a_entry;
+            while (!addrs.isEmpty() && addrs.peek().value == pc) {
+                Symbol s = addrs.remove();
+                if (s.isObject()) {
+                    System.out.printf("[%s]\n", s.name);
+                } else if (!s.isNull()) {
+                    System.out.printf("%s:\n", s.name);
+                    w = true;
                 }
             }
-            if (asm == null) {
-                asm = disasm1();
+            int oldpc = pc;
+            String asm;
+            if (casec > 0) {
+                int ad = casead + fetch(2);
+                addAddress(ad);
+                asm = String.format(".word 0x%x-0x%x", ad, casead);
+                --casec;
+            } else {
+                asm = w ? word() : disasm1(pc);
+            }
+            if (!addrs.isEmpty() && addrs.peek().value < pc) {
+                Symbol s = addrs.peek();
+                pc = oldpc;
+                asm = bytes(s.value - pc);
             }
             output(out, oldpc, pc - oldpc, asm);
         }
     }
 
-    public String word1() {
-        return ".word " + hex(Short.toUnsignedInt((short) fetchSigned(2)));
+    public String bytes(int len) {
+        ArrayList<String> bs = new ArrayList<>();
+        for (int i = 0; i < len; ++i) {
+            bs.add(String.format("0x%02x", fetch()));
+        }
+        return ".byte " + String.join(", ", bs);
     }
 
-    public String addr(int ad) {
+    public String word() {
+        return ".word " + hex(Short.toUnsignedInt((short) fetch(2)));
+    }
+
+    public String word(int pc) {
+        this.pc = pc;
+        return word();
+    }
+
+    public String address(int ad) {
+        addAddress(ad);
         String ret = String.format("0x%x", ad);
         if (aout != null && aout.symT.containsKey(ad)) {
             ret += "<" + aout.symT.get(ad) + ">";
@@ -345,35 +433,6 @@ class VAXDisasm extends Memory {
     }
 }
 
-class Symbol {
-
-    public final String name;
-    public final int type, other, desc, value;
-    public final char tchar;
-
-    public Symbol(ByteBuffer buf, int p) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 8; ++i) {
-            char ch = (char) buf.get(p + i);
-            if (ch == 0) {
-                break;
-            }
-            sb.append(ch);
-        }
-        name = sb.toString();
-        type = buf.get(p + 8);
-        other = buf.get(p + 9);
-        desc = buf.getShort(p + 10);
-        value = buf.getInt(p + 12);
-        tchar = type < 10 ? "uUaAtTdDbB".charAt(type) : '?';
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%08x %c %s", value, tchar, name);
-    }
-}
-
 class AOut {
 
     public final ByteBuffer header;
@@ -382,6 +441,7 @@ class AOut {
     public final Symbol[] syms;
     public final HashMap<Integer, String> symO = new HashMap<>();
     public final HashMap<Integer, String> symT = new HashMap<>();
+    private final Symbol[] addrs;
 
     public AOut(String path) throws IOException {
         try (FileInputStream fis = new FileInputStream(path)) {
@@ -408,21 +468,33 @@ class AOut {
                     fis.read(sym);
                     ByteBuffer sbuf = ByteBuffer.wrap(sym).order(ByteOrder.LITTLE_ENDIAN);
                     ArrayList<Symbol> list = new ArrayList<>();
+                    ArrayList<Symbol> ads = new ArrayList<>();
                     for (int p = 0; p <= a_syms - 16; p += 16) {
                         Symbol s = new Symbol(sbuf, p);
                         list.add(s);
                         if (4 <= s.type && s.type <= 9) {
-                            if (s.name.endsWith(".o")) {
+                            if (s.isObject()) {
                                 symO.put(s.value, s.name);
                             } else {
                                 symT.put(s.value, s.name);
                             }
+                            ads.add(s);
                         }
                     }
-                    syms = new Symbol[list.size()];
-                    list.toArray(syms);
+                    syms = list.toArray(new Symbol[list.size()]);
+                    ads.sort((a, b) -> {
+                        int ret = a.value - b.value;
+                        if (ret == 0) {
+                            int ao = a.isObject() ? 0 : 1;
+                            int bo = b.isObject() ? 0 : 1;
+                            return ao - bo;
+                        }
+                        return ret;
+                    });
+                    addrs = ads.toArray(new Symbol[ads.size()]);
                 } else {
                     syms = null;
+                    addrs = new Symbol[0];
                 }
                 return;
             }
@@ -432,6 +504,7 @@ class AOut {
         text = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
         data = null;
         syms = null;
+        addrs = new Symbol[0];
     }
 
     @Override
@@ -444,6 +517,10 @@ class AOut {
                 + "syms  = %08x, entry = %08x, trsize = %08x, drsize = %08x",
                 a_magic, a_text, a_data, a_bss,
                 a_syms, a_entry, a_trsize, a_drsize);
+    }
+
+    public LinkedList<Symbol> getAddresses() {
+        return new LinkedList<>(Arrays.asList(addrs));
     }
 }
 
@@ -464,7 +541,8 @@ public class Main {
                 }
                 AOut aout = new AOut(args[i]);
                 System.out.println(aout);
-                new VAXDisasm(aout).disasm(System.out);
+                ByteBuffer mem = ByteBuffer.wrap(aout.text).order(ByteOrder.LITTLE_ENDIAN);
+                new VAXDisasm(mem, aout).disasm(System.out, 0, aout.text.length);
             }
         } catch (Exception ex) {
             ex.printStackTrace(System.err);
