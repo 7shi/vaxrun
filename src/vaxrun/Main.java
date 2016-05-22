@@ -942,7 +942,7 @@ class VAXDisasm {
     }
 
     public String sym(int ad, int size, boolean deref) {
-        boolean f = mode > 2 && aout != null && ad >= aout.a_text;
+        boolean f = (mode > 2 && aout != null && ad >= aout.a_text) || mode == 4;
         if (aout != null && aout.symT.containsKey(ad)) {
             String s = aout.symT.get(ad);
             if (!f) {
@@ -1135,7 +1135,10 @@ class VAX {
 
     public VAX() {
         aout = null;
+        mode = 1;
+        r[SP] = mem.length - 4;
         dis = new VAXDisasm(buf, null, r);
+        dis.setMode(4);
     }
 
     public VAX(AOut aout, String[] args) {
@@ -1438,14 +1441,11 @@ class VAX {
         System.arraycopy(bin, 0, mem, r[PC], bin.length);
         out.printf("%08x  ", r[PC]);
         out.println(VAXAsm.binhex(bin) + "  " + dis.disasm1(r[PC]));
-        int m = mode;
-        mode = 1;
         try {
             step();
         } catch (Exception ex) {
             out.println(ex.getMessage());
         }
-        mode = m;
     }
 
     public void run(int mode) throws Exception {
@@ -2117,12 +2117,12 @@ public class Main {
             }
         }
         if (target == null) {
-            System.err.println("usage: vaxrun [-d|-v/-s] a.out [args ...]");
-            System.err.println("    -d: disassemble mode (not run)");
-            System.err.println("    -m: verbose mode with memory dump");
-            System.err.println("    -v: verbose mode (output syscall and disassemble)");
-            System.err.println("    -s: syscall mode (output syscall)");
-            System.err.println("    -e: memory dump");
+            System.err.println("usage: vaxrun [options]");
+            System.err.println("    -d a.out: disassemble mode (not run)");
+            System.err.println("    -e a.out: memory dump");
+            System.err.println("    -m a.out [args ...]: verbose mode with memory dump");
+            System.err.println("    -v a.out [args ...]: verbose mode (output syscall and disassemble)");
+            System.err.println("    -s a.out [args ...]: syscall mode (output syscall)");
             System.err.println("    -r: read-eval-print loop (repl)");
             System.exit(1);
         }
