@@ -127,14 +127,22 @@ enum VAXOp {
     BUGL(0xfffd, "l"), BUGW(0xfffe, "w");
 
     public static final VAXOp[] table = new VAXOp[0x10000];
+    public static final int max;
+    public static final String[] ops;
     public final int op;
     public final String mne;
     public final char[] oprs;
 
     static {
-        for (VAXOp op : VAXOp.values()) {
+        for (VAXOp op : values()) {
             table[op.op] = op;
         }
+        ops = Arrays.stream(values())
+                .map(op -> op.toString().toLowerCase())
+                .sorted()
+                .toArray(c -> new String[c]);
+        max = Arrays.stream(ops)
+                .map(op -> op.length()).max(Integer::compare).get();
     }
 
     private VAXOp(int op, String oprs) {
@@ -169,20 +177,34 @@ enum VAXOp {
 
     public static final String[] guess(String src, int n) {
         String src2 = src.toLowerCase();
-        String[] vals = Arrays.stream(values())
-                .map(op -> op.toString().toLowerCase())
-                .toArray(c -> new String[c]);
-        String[] vals2 = Arrays.stream(vals)
+        String[] vals = Arrays.stream(ops)
                 .filter(op -> op.startsWith(src))
                 .toArray(c -> new String[c]);
-        if (vals2.length == 0) {
-            vals2 = Arrays.stream(vals)
+        if (vals.length == 0) {
+            vals = Arrays.stream(ops)
                     .filter(op -> getSimilarity(src2, op) >= 0)
                     .toArray(c -> new String[c]);
         }
-        return Arrays.stream(vals2)
+        return Arrays.stream(vals)
                 .sorted((a, b) -> getSimilarity(src2, b) - getSimilarity(src2, a))
                 .limit(n).toArray(c -> new String[c]);
+    }
+
+    public static final void showAll(PrintStream out) {
+        int col = 0;
+        String fmt = "%-" + max + "s ";
+        for (String op : ops) {
+            if (col + (max + 1) * 2 > 80) {
+                out.println(op);
+                col = 0;
+            } else {
+                out.printf(fmt, op);
+                col += max + 1;
+            }
+        }
+        if (col > 0) {
+            out.println();
+        }
     }
 }
 
@@ -564,7 +586,7 @@ class VAXAsm {
             op = VAXOp.valueOf(mne.toUpperCase());
         } catch (Exception ex) {
             throw new Exception("unknown mnemonic: " + mne
-                    + " (" + String.join(", ", VAXOp.guess(mne, 5)) + "?)");
+                    + " (" + String.join(", ", VAXOp.guess(mne, 8)) + "?)");
         }
         if (op.op < 0x100) {
             write(1, op.op);
@@ -2133,7 +2155,12 @@ public class Main {
                 if (line == null) {
                     break;
                 }
-                vax.interpret(System.out, line);
+                if (line.trim().equals("?")) {
+                    VAXOp.showAll(System.out);
+                    System.out.println();
+                } else {
+                    vax.interpret(System.out, line);
+                }
             }
         } catch (Exception ex) {
             ex.printStackTrace(System.err);
