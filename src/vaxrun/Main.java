@@ -142,6 +142,48 @@ enum VAXOp {
         this.mne = toString().toLowerCase();
         this.oprs = oprs.toCharArray();
     }
+
+    public String getUsage() {
+        StringBuilder sb = new StringBuilder(toString().toLowerCase());
+        sb.append(' ');
+        for (int i = 0; i < oprs.length; ++i) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(VAXType.table[oprs[i]]);
+        }
+        return sb.toString();
+    }
+
+    public static final int getSimilarity(String src, String target) {
+        int ret = -Math.abs(src.length() - target.length()), s = 2;
+        for (int i = 0; i < src.length(); ++i) {
+            int p = target.indexOf(src.charAt(i));
+            if (p >= 0) {
+                ret += s++;
+                target = target.substring(0, p) + target.substring(p + 1);
+            }
+        }
+        return ret - target.length();
+    }
+
+    public static final String[] guess(String src, int n) {
+        String src2 = src.toLowerCase();
+        String[] vals = Arrays.stream(values())
+                .map(op -> op.toString().toLowerCase())
+                .toArray(c -> new String[c]);
+        String[] vals2 = Arrays.stream(vals)
+                .filter(op -> op.startsWith(src))
+                .toArray(c -> new String[c]);
+        if (vals2.length == 0) {
+            vals2 = Arrays.stream(vals)
+                    .filter(op -> getSimilarity(src2, op) >= 0)
+                    .toArray(c -> new String[c]);
+        }
+        return Arrays.stream(vals2)
+                .sorted((a, b) -> getSimilarity(src2, b) - getSimilarity(src2, a))
+                .limit(n).toArray(c -> new String[c]);
+    }
 }
 
 class Symbol {
@@ -503,6 +545,9 @@ class VAXAsm {
 
     private void instruction() throws Exception {
         String mne = symbol();
+        if (mne.isEmpty()) {
+            throw new Exception("mnemonic required");
+        }
         switch (mne.toLowerCase()) {
             case ".byte":
                 numbers(1);
@@ -518,7 +563,8 @@ class VAXAsm {
         try {
             op = VAXOp.valueOf(mne.toUpperCase());
         } catch (Exception ex) {
-            throw new Exception("unknown mnemonic: " + mne);
+            throw new Exception("unknown mnemonic: " + mne
+                    + " (" + String.join(", ", VAXOp.guess(mne, 5)) + "?)");
         }
         if (op.op < 0x100) {
             write(1, op.op);
@@ -532,13 +578,22 @@ class VAXAsm {
             }
             VAXType t = VAXType.table[op.oprs[i]];
             if (t == VAXType.RELB || t == VAXType.RELW) {
-                int ad = (int) number();
+                int ad;
+                try {
+                    ad = (int) number();
+                } catch (Exception ex) {
+                    throw new Exception("address required");
+                }
                 int rel = ad - (pc + bpos + t.size);
                 if (write(t.size, rel) != rel) {
                     throw new Exception("out of range: 0x" + Integer.toHexString(ad));
                 }
             } else {
-                operand(t.size);
+                try {
+                    operand(t.size);
+                } catch (Exception ex) {
+                    throw new Exception("usage: " + op.getUsage());
+                }
             }
         }
     }
@@ -2064,6 +2119,28 @@ class VAX {
 
 public class Main {
 
+    static final void repl() {
+        System.out.println("Press [Ctrl]+[C] to exit.");
+        System.out.println();
+        VAX vax = new VAX();
+        try (InputStreamReader isr = new InputStreamReader(System.in);
+                BufferedReader br = new BufferedReader(isr)) {
+            for (;;) {
+                vax.debugRepl(System.out);
+                System.out.println();
+                System.out.print("VAX> ");
+                String line = br.readLine();
+                if (line == null) {
+                    break;
+                }
+                vax.interpret(System.out, line);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace(System.err);
+            System.exit(1);
+        }
+    }
+
     public static void main(String[] args) {
         boolean disasm = false, memdump = false;
         int mode = 0;
@@ -2088,28 +2165,9 @@ public class Main {
                 case "-e":
                     memdump = true;
                     break;
-                case "-r": {
-                    System.out.println("Press [Ctrl]+[C] to exit.");
-                    System.out.println();
-                    VAX vax = new VAX();
-                    try (InputStreamReader isr = new InputStreamReader(System.in);
-                            BufferedReader br = new BufferedReader(isr)) {
-                        for (;;) {
-                            vax.debugRepl(System.out);
-                            System.out.println();
-                            System.out.print("VAX> ");
-                            String line = br.readLine();
-                            if (line == null) {
-                                break;
-                            }
-                            vax.interpret(System.out, line);
-                        }
-                    } catch (Exception ex) {
-                        ex.printStackTrace(System.err);
-                        System.exit(1);
-                    }
+                case "-r":
+                    repl();
                     return;
-                }
                 default:
                     target = arg;
                     args2 = Arrays.copyOfRange(args, i, args.length);
