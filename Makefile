@@ -9,6 +9,7 @@ all:
 	$(MAKE) $@ -C cmd
 
 install-msys2:
+	mkdir -p $(BINDIR)
 	sh msys2.sh $(BINDIR)
 
 install:
